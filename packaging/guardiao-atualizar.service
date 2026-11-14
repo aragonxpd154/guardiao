@@ -1,0 +1,11 @@
+[Unit]
+Description=Guardião — procura versão nova no GitHub e pergunta se deseja atualizar
+Documentation=https://github.com/aragonxpd154/guardiao
+After=graphical-session.target network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/guardiao --verificar-atualizacao --notificar
+# o aviso fica esperando a resposta do usuário; não deixa o serviço preso para sempre
+TimeoutStartSec=6h
+Nice=10

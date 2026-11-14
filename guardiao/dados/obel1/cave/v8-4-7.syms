@@ -1,0 +1,9 @@
+00206498 obel_sync
+002064ec obel_sync_delay
+00206520 obel_cfg_valid
+00206618 obel_cfg_commit
+002066a4 obel_cfg_load
+00206740 str_bak
+00206757 msg_bad
+00206773 msg_bak
+0020678c _end_cave

@@ -1,0 +1,11 @@
+[Unit]
+Description=Guardião — coleta e valida a configuração das SYS do NetVX
+Documentation=https://github.com/aragonxpd154/guardiao
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/guardiao coletar --notificar
+# 2 = alerta (config ruim/zerada): não é falha do serviço
+SuccessExitStatus=1 2
+Nice=10

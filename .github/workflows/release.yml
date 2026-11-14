@@ -1,0 +1,51 @@
+# Publica uma versão nova: basta criar e enviar a tag.
+#   git tag v2.1.0 && git push origin v2.1.0
+# O GitHub roda os testes, gera o .deb e cria a Release com o pacote e o SHA-256.
+# O atualizador do Guardião instalado nos computadores encontra essa Release sozinho.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Confere a versão da tag
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          CODIGO="$(python3 -c 'import guardiao; print(guardiao.__version__)')"
+          if [ "$TAG" != "$CODIGO" ]; then
+            echo "::error::A tag v$TAG não bate com guardiao/__init__.py ($CODIGO)"; exit 1
+          fi
+
+      - name: Testes
+        run: pip install pyftpdlib && python3 -m unittest discover -s tests -v
+
+      - name: Gera o .deb
+        run: packaging/build-deb.sh
+
+      - name: Notas da versão (do CHANGELOG.md)
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          awk -v v="$V" '$0 ~ "^## "v"( |$)" {ok=1; next} /^## / && ok {exit} ok' CHANGELOG.md > notas.md
+          [ -s notas.md ] || echo "Guardião $V" > notas.md
+          cat notas.md
+
+      - name: Cria a Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Se você já criou a Release pelo terminal, só atualiza os arquivos dela.
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/*.deb dist/*.deb.sha256 --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/*.deb dist/*.deb.sha256 \
+              --title "Guardião ${GITHUB_REF_NAME#v}" --notes-file notas.md
+          fi

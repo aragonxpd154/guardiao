@@ -1,0 +1,28 @@
+[Desktop Entry]
+Type=Application
+Name=Guardião
+GenericName=Atualização segura da SYS do NetVX
+Comment=Protege a configuração das SYS do NetVX, aplica o patch obel1 e testa o failover
+Exec=guardiao assistente
+Icon=guardiao
+Terminal=false
+Categories=Network;System;Utility;
+Keywords=netvx;harris;sys;firmware;failover;backup;configuração;
+StartupWMClass=io.github.aragonxpd154.guardiao
+Actions=coletar;historico;configurar;atualizar;
+
+[Desktop Action coletar]
+Name=Coletar agora (vigiar a config)
+Exec=x-terminal-emulator -e guardiao --pausar coletar
+
+[Desktop Action historico]
+Name=Histórico das coletas
+Exec=x-terminal-emulator -e guardiao --pausar listar
+
+[Desktop Action configurar]
+Name=Editar configuração
+Exec=guardiao configurar
+
+[Desktop Action atualizar]
+Name=Procurar atualização do Guardião
+Exec=x-terminal-emulator -e guardiao --pausar --atualizar

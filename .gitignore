@@ -1,0 +1,20 @@
+__pycache__/
+*.pyc
+dist/
+build/
+.venv/
+.idea/
+.vscode/
+# configuração local (tem senhas) e dados coletados
+guardiao.ini
+Guardiao/
+# nunca versionar firmware/binários da Harris
+*.zip
+firmware/
+vxworks
+Upgrade.exe
+*.mib
+*.pdf
+patch-obel1/cave/
+*.o
+*.elf

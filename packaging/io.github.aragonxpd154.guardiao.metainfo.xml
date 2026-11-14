@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Metadados AppStream: é daqui que a loja Programas/Software do Zorin OS
+     tira licença, descrição, capturas de tela e notas de versão do Guardião. -->
+<component type="desktop-application">
+  <id>io.github.aragonxpd154.guardiao</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+
+  <name>Guardião</name>
+  <summary>Protect the NetVX system controller configuration and apply the obel1 patch safely</summary>
+  <summary xml:lang="pt-BR">Protege a configuração das SYS do NetVX e aplica o patch obel1 com segurança</summary>
+
+  <developer id="io.github.aragonxpd154">
+    <name>Marcos Santos</name>
+  </developer>
+
+  <description>
+    <p>
+      Guardião watches and protects the configuration of the Harris NetVX system controllers (SYS),
+      which can be lost from the CompactFlash card and wiped on chassis with a redundant controller.
+    </p>
+    <p>A step-by-step assistant:</p>
+    <ul>
+      <li>backs up the configuration to the notebook and to a slot of the SYS itself</li>
+      <li>builds the patched image from the firmware already on the card (no vendor files shipped)</li>
+      <li>uploads it, verifies it byte by byte, binds and activates it</li>
+      <li>completes the controller protection and tests failover and failback</li>
+      <li>rolls back to the original version at any time</li>
+    </ul>
+    <p>It then checks every chassis every 10 minutes and warns on the desktop if a configuration is lost.</p>
+    <p xml:lang="pt-BR">
+      O Guardião vigia e protege a configuração das controladoras (SYS) do Harris NetVX, que pode se
+      perder do cartão CompactFlash e zerar nos chassis com SYS reserva.
+    </p>
+    <p xml:lang="pt-BR">Um assistente passo a passo:</p>
+    <ul xml:lang="pt-BR">
+      <li>faz backup da configuração no notebook e num slot da própria SYS</li>
+      <li>monta a imagem corrigida a partir do firmware que já está no cartão (sem arquivos do fabricante)</li>
+      <li>envia, confere byte a byte, faz o bind e ativa</li>
+      <li>completa a proteção da reserva e testa o failover e o failback</li>
+      <li>volta para a versão original a qualquer momento</li>
+    </ul>
+    <p xml:lang="pt-BR">Depois, confere cada chassi a cada 10 minutos e avisa na área de trabalho se a configuração se perder.</p>
+  </description>
+
+  <launchable type="desktop-id">guardiao.desktop</launchable>
+  <provides>
+    <binary>guardiao</binary>
+  </provides>
+
+  <url type="homepage">https://github.com/aragonxpd154/guardiao</url>
+  <url type="bugtracker">https://github.com/aragonxpd154/guardiao/issues</url>
+  <url type="vcs-browser">https://github.com/aragonxpd154/guardiao</url>
+
+  <screenshots>
+    <screenshot type="default">
+      <caption>Step-by-step assistant applying the patch</caption>
+      <caption xml:lang="pt-BR">Assistente aplicando o patch passo a passo</caption>
+      <image>https://raw.githubusercontent.com/aragonxpd154/guardiao/main/assets/tela-assistente.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Chassis state after the diagnosis</caption>
+      <caption xml:lang="pt-BR">Estado do chassi após o diagnóstico</caption>
+      <image>https://raw.githubusercontent.com/aragonxpd154/guardiao/main/assets/tela-diagnostico.png</image>
+    </screenshot>
+  </screenshots>
+
+  <categories>
+    <category>Network</category>
+    <category>System</category>
+  </categories>
+  <keywords>
+    <keyword>netvx</keyword>
+    <keyword>firmware</keyword>
+    <keyword>failover</keyword>
+    <keyword xml:lang="pt-BR">configuração</keyword>
+    <keyword xml:lang="pt-BR">backup</keyword>
+  </keywords>
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
+  <content_rating type="oars-1.1"/>
+
+  <releases>
+    <release version="2.0.0" date="2026-11-14">
+      <description>
+        <p>Graphical step-by-step assistant that applies the obel1 patch to the NetVX SYS, completes the controller protection and tests failover/failback; Debian package with menu and desktop shortcuts; 10-minute monitoring with desktop alerts.</p>
+        <p xml:lang="pt-BR">Assistente gráfico passo a passo que aplica o patch obel1 na SYS do NetVX, completa a proteção da reserva e testa failover/failback; pacote .deb com atalhos no menu e na Área de Trabalho; vigilância a cada 10 minutos com aviso na área de trabalho.</p>
+      </description>
+    </release>
+    <release version="1.0.0" date="2026-11-14">
+      <description>
+        <p>First release: FTP collection, validation and restore of the SYS configuration.</p>
+        <p xml:lang="pt-BR">Primeira versão: coleta, validação e restauração da configuração da SYS por FTP.</p>
+      </description>
+    </release>
+  </releases>
+</component>

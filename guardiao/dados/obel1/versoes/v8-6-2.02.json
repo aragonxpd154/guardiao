@@ -1,0 +1,41 @@
+{
+  "crc_original": "0xb5d1a962",
+  "funcs": {
+    "open": "0x2c3ccc",
+    "close": "0x2c40bc",
+    "read": "0x2c41dc",
+    "ioctl": "0x2c4314",
+    "strcmp": "0x2bbc70",
+    "taskDelay": "0x30e04c",
+    "loggerMsg": "0x317bc",
+    "OS_Rename": "0x1f6340",
+    "Db_Sc_Cfg_Load": "0x151ef0"
+  },
+  "STR_DISK": "0x31a350",
+  "STR_CURRENT": "0x36e188",
+  "cave": "0x20986c",
+  "cave_size": 764,
+  "cave_word0": "0x9421ffd0",
+  "sites": {
+    "P1": {
+      "addr": "0x14e270",
+      "orig": "0x481bfddd"
+    },
+    "P2": {
+      "addr": "0x151eb0",
+      "orig": "0x480a4491"
+    },
+    "P3": {
+      "addr": "0x152178",
+      "orig": "0x4bfffd79"
+    },
+    "P4": {
+      "addr": "0x1e414",
+      "orig": "0x4828fc51"
+    },
+    "P5": {
+      "addr": "0x5e4e0",
+      "orig": "0x38c0ffff"
+    }
+  }
+}

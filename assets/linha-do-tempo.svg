@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="420" viewBox="0 0 1280 420">
+  <defs>
+    <linearGradient id="trilho" gradientUnits="userSpaceOnUse" x1="150" y1="0" x2="1130" y2="0">
+      <stop offset="0" stop-color="#4B3A12"/>
+      <stop offset="0.5" stop-color="#FBBF24"/>
+      <stop offset="1" stop-color="#10B981"/>
+    </linearGradient>
+    <pattern id="pontos" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1" fill="#1F2533"/>
+    </pattern>
+  </defs>
+  <rect width="1280" height="420" fill="#0B0F19"/>
+  <rect width="1280" height="420" fill="url(#pontos)" opacity="0.6"/>
+  <text x="60" y="62" font-family="Inter Display" font-weight="700" font-size="30" fill="#F3F4F6">Da config zerando à SYS protegida</text>
+  <text x="60" y="94" font-family="Inter" font-size="18" fill="#8A93A8">novembro de 2026 · NetVX 8.4.7 / 8.4.8 / 8.6.2-02 · Zorin OS</text>
+  <line x1="150" y1="160" x2="1130" y2="160" stroke="url(#trilho)" stroke-width="4" stroke-linecap="round"/>
+
+  <g font-family="Inter">
+    <circle cx="150" cy="160" r="16" fill="#0B0F19" stroke="#B45309" stroke-width="5"/>
+    <text x="150" y="214" text-anchor="middle" font-weight="700" font-size="26" fill="#FCD34D">diagnóstico</text>
+    <text x="150" y="240" text-anchor="middle" font-size="16" fill="#8A93A8">firmware da Harris</text>
+    <g font-size="16" fill="#AEB6C8">
+      <text x="40" y="282">• zera a config antes de ler o cartão</text>
+      <text x="40" y="308">• reset antes de gravar o cache</text>
+      <text x="40" y="334">• formata o CF sozinho</text>
+      <text x="40" y="360">• igual na 8.4.7, 8.4.8 e 8.6.2</text>
+    </g>
+
+    <circle cx="640" cy="160" r="16" fill="#0B0F19" stroke="#FBBF24" stroke-width="5"/>
+    <text x="640" y="214" text-anchor="middle" font-weight="700" font-size="26" fill="#FDE68A">1.0.0</text>
+    <text x="640" y="240" text-anchor="middle" font-size="16" fill="#8A93A8">Guardião NetVX</text>
+    <g font-size="16" fill="#AEB6C8">
+      <text x="520" y="282">• coleta a config por FTP</text>
+      <text x="520" y="308">• valida e guarda histórico</text>
+      <text x="520" y="334">• alerta quando zera</text>
+      <text x="520" y="360">• restaura por slot (util load)</text>
+    </g>
+
+    <circle cx="1130" cy="160" r="24" fill="#10B981" opacity="0.18"/>
+    <circle cx="1130" cy="160" r="16" fill="#0B0F19" stroke="#10B981" stroke-width="5"/>
+    <text x="1130" y="214" text-anchor="middle" font-weight="700" font-size="26" fill="#A7F3D0">2.0.0</text>
+    <text x="1130" y="240" text-anchor="middle" font-size="16" fill="#8A93A8">Assistente + obel1</text>
+    <g font-size="16" fill="#AEB6C8">
+      <text x="985" y="282">• patch aplicado passo a passo</text>
+      <text x="985" y="308">• proteção da reserva completa</text>
+      <text x="985" y="334">• teste de failover e failback</text>
+      <text x="985" y="360">• .deb, menu e aviso a cada 10 min</text>
+    </g>
+  </g>
+</svg>

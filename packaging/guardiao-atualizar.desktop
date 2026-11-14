@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Atualizar o Guardião
+Comment=Procura e instala uma versão nova do Guardião
+Exec=guardiao --atualizar --pausar
+Icon=guardiao
+Terminal=true
+NoDisplay=true
+Categories=Network;System;

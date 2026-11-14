@@ -1,0 +1,12 @@
+Guardião - Copyright (c) 2026 Marcos Santos - licença GPL-3.0 (arquivo LICENSE).
+
+Projeto independente, sem vínculo com Harris Corporation, Imagine Communications
+ou GatesAir. NetVX, VideoRunner e Vidiem são marcas de seus respectivos donos.
+
+Este repositório não contém firmware, binários, MIBs nem documentação da Harris.
+O patch obel1 é aplicado pelo usuário sobre a imagem que já está no cartão da
+própria SYS. Os arquivos em guardiao/dados/obel1/ contêm apenas o código novo
+(montado de patch-obel1/cave.S) e os endereços onde ele é ligado em cada versão.
+
+Alterar o firmware de um equipamento em produção é responsabilidade de quem o
+faz. Teste em bancada antes e mantenha uma cópia do cartão.
