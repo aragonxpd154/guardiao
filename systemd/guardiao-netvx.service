@@ -1,0 +1,10 @@
+[Unit]
+Description=Guardião NetVX - coleta e valida a config das SYS
+After=network-online.target
+
+[Service]
+Type=oneshot
+# ajuste o caminho para onde você colocou o guardiao
+ExecStart=/usr/bin/python3 %h/guardiao-netvx/guardiao.py -c %h/guardiao-netvx/guardiao.ini coletar
+# código 2 = alerta (config ruim/zerada); não tratar como falha do serviço
+SuccessExitStatus=2

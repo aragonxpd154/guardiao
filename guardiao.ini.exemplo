@@ -1,0 +1,29 @@
+# Guardião NetVX — copie para guardiao.ini e preencha.
+# Proteja o arquivo: chmod 600 guardiao.ini (tem senhas).
+
+[geral]
+# onde ficam os snapshots
+pasta = ~/guardiao-netvx/backups
+# alerta quando o número de linhas da config cair mais que isto (%)
+queda_linhas_pct = 30
+# comando chamado quando houver ALERTA/ERRO; a mensagem vem em $GUARDIAO_MSG
+# exemplos:
+#   alerta_cmd = notify-send "Guardião NetVX" "$GUARDIAO_MSG"
+#   alerta_cmd = snmptrap -v2c -c public 10.0.0.50 '' 1.3.6.1.4.1.8072.2.3.0.1 1.3.6.1.4.1.8072.2.3.2.1 s "$GUARDIAO_MSG"
+alerta_cmd =
+
+# Uma seção por SYS (cada controladora tem IP próprio).
+[sys-slot1]
+host = 192.168.0.11
+usuario = admin
+senha = TROCAR
+passivo = sim
+# só para "restaurar --carregar" (snmpset utilCmdLoad)
+comunidade_escrita =
+
+[sys-slot2]
+host = 192.168.0.12
+usuario = admin
+senha = TROCAR
+passivo = sim
+comunidade_escrita =
