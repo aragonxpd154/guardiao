@@ -82,6 +82,11 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="2.0.1" date="2026-11-16">
+      <description>
+        <p>Failover e failback confiáveis em bancada com switch: espera a SYS voltar durante a troca, retoma o failback quando o slot 2 ficou no comando e confere a proteção no fim.</p>
+      </description>
+    </release>
     <release version="2.0.0" date="2026-11-14">
       <description>
         <p>Graphical step-by-step assistant that applies the obel1 patch to the NetVX SYS, completes the controller protection and tests failover/failback; Debian package with menu and desktop shortcuts; 10-minute monitoring with desktop alerts.</p>

@@ -147,6 +147,55 @@ class FluxoSintetico(Base):
         self.assertEqual(r.status, A.ERRO)
         self.assertIn("bytes nulos", r.resumo)
 
+    def test_bancada_com_switch(self):
+        """Bancada de 16/11: as duas SYS e o notebook num switch. Depois do failover a
+        sessão fica muda, o IP some um tempo, o FTP volta depois do telnet e o slot 1
+        reinicia. Antes isso parava em 'Tempo esgotado: timed out' com o slot 2 no
+        comando."""
+        sim = Sim(self.raiz, VER, protecao_completa=True, queda=0.6,
+                  silencioso=True, transicao=24, ftp_atraso=4)
+        self.addCleanup(sim.fechar)
+        res, ctx, logs = self.rodar(sim, Operador(sim, ativar="reset"))
+        self.assertEqual(res["failover"].status, A.OK, res["failover"].resumo)
+        trocas = [c for c in sim.historico if c.startswith("util fail")]
+        self.assertEqual(trocas, ["util failover slot.1", "util failback slot.1"])
+        self.assertEqual(sim.ativo, 1)
+        self.assertTrue(sim.protecao_ok())
+
+    def test_retoma_failback_com_slot2_no_comando(self):
+        """Teste interrompido: o slot 2 ficou no comando. Rodar o teste de novo só faz o
+        failback (antes: 'Sem proteção ativa, não há failover para testar')."""
+        sim = Sim(self.raiz, VER, protecao_completa=True, queda=0.4, silencioso=True, transicao=0.5)
+        self.addCleanup(sim.fechar)
+        self.rodar(sim, Operador(sim, testar_failover=False))
+        with sim.lock:
+            sim.executar("util failover slot.1")
+        n = len(sim.historico)
+        res, ctx, _ = self.rodar(sim, Operador(sim), etapas={"failover"})
+        self.assertEqual(res["failover"].status, A.OK, res["failover"].resumo)
+        self.assertEqual([c for c in sim.historico[n:] if c.startswith("util fail")], ["util failback slot.1"])
+        self.assertEqual(sim.ativo, 1)
+
+    def test_diagnostico_com_slot2_no_comando_oferece_failback(self):
+        sim = Sim(self.raiz, VER, protecao_completa=True, queda=0.4)
+        self.addCleanup(sim.fechar)
+        with sim.lock:
+            sim.executar("util failover slot.1")
+        op = Operador(sim)
+        res, ctx, _ = self.rodar(sim, op, etapas={"diagnostico"})
+        self.assertIn("O slot 2 está no comando", op.perguntas)
+        self.assertEqual(sim.ativo, 1)
+        self.assertNotEqual(res["diagnostico"].status, A.ERRO)
+
+    def test_failover_recusado_vira_mensagem(self):
+        sim = Sim(self.raiz, VER, queda=0.3)          # proteção incompleta
+        self.addCleanup(sim.fechar)
+        ctx = A.Contexto(Chassi(sim.credenciais()), Path(tempfile.mkdtemp()), perguntar=Operador(sim), escala=0.05)
+        with self.assertRaises(A.Parar) as cm:
+            A._fazer_failover(ctx, 0)
+        self.assertIn("No backup available", str(cm.exception))
+        self.assertEqual(sim.ativo, 1)
+
     def test_rollback(self):
         sim = Sim(self.raiz, VER, queda=0.3)
         self.addCleanup(sim.fechar)

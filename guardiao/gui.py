@@ -427,9 +427,7 @@ class Janela(Adw.ApplicationWindow):
         L["firmware"].set_subtitle(e.firmware_sys)
         L["config"].set_subtitle(f"{e.cfg.motivo}, {e.cfg.linhas} linhas" if e.cfg else "—")
         L["bak"].set_subtitle(("íntegro" if e.bak.valido else e.bak.motivo) if e.bak else "ainda não existe")
-        L["protecao"].set_subtitle({"ativa": "ativa — slot 2 é reserva do slot 1",
-                                    "incompleta": "incompleta — reserva encaixada mas não configurada",
-                                    "desligada": "desligada", "sem-reserva": "sem reserva no chassi"}[e.protecao])
+        L["protecao"].set_subtitle(A.NOMES_PROTECAO.get(e.protecao, e.protecao))
 
     def _reverter(self):
         if self.ctx is None:

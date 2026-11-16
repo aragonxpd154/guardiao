@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import patch
-from .netvx import Chassi, Credenciais, Estado, _mesmo
+from .netvx import FALHAS_DE_REDE, Chassi, Credenciais, ErroTroca, Estado, _mesmo
 from .validacao import eh_obel1, eh_original, validar_cfg
 
 OK, AVISO, ERRO, PULADO = "ok", "aviso", "erro", "pulado"
@@ -55,9 +55,22 @@ class Contexto:
                 raise InterruptedError("cancelado")
             time.sleep(min(0.5, max(0, fim - time.time())))
 
-    def atualizar(self) -> Estado:
-        self.estado = self.chassi.estado()
-        return self.estado
+    def atualizar(self, paciencia: float = 90) -> Estado:
+        """Lê o chassi. Logo depois de um failover/failback/reset a SYS passa um tempo
+        sem responder (ou com o FTP ainda fora): tenta de novo antes de desistir."""
+        fim = time.time() + self.t(paciencia)
+        avisou = False
+        while True:
+            try:
+                self.estado = self.chassi.estado()
+                return self.estado
+            except FALHAS_DE_REDE as ex:
+                if time.time() >= fim:
+                    raise
+                if not avisou:
+                    self.log(f"A SYS não respondeu ({ex.__class__.__name__}); tentando de novo…", "aviso")
+                    avisou = True
+                self.esperar(5)
 
     def aguardar(self, condicao, segundos: float, o_que: str) -> Estado:
         self.log(f"Aguardando {o_que}…", "info")
@@ -76,6 +89,16 @@ def _agora() -> str:
     return datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
+NOMES_PROTECAO = {
+    "ativa": "ativa (slot 2 pronto para assumir)",
+    "em-uso": "EM USO: o slot 2 está no comando (falta o failback)",
+    "aguardando": "configurada, aguardando a reserva ficar disponível",
+    "incompleta": "INCOMPLETA (reserva não configurada)",
+    "desligada": "desligada",
+    "sem-reserva": "sem reserva no chassi",
+}
+
+
 def resumo_estado(e: Estado) -> list[str]:
     linhas = [f"Chassi {e.chassi or '?'} — no comando: slot {e.slot_ativo or '?'}"]
     for s in (1, 2):
@@ -88,36 +111,107 @@ def resumo_estado(e: Estado) -> list[str]:
     if e.cfg:
         linhas.append(f"  configuração: {e.cfg.motivo}, {e.cfg.linhas} linhas, rótulo '{e.cfg.tag or ''}'")
     linhas.append(f"  current.bak: {'presente' if e.bak else 'ainda não existe'}")
-    nomes = {"ativa": "ativa", "incompleta": "INCOMPLETA (reserva não configurada)",
-             "desligada": "desligada", "sem-reserva": "sem reserva no chassi"}
+    nomes = NOMES_PROTECAO
     linhas.append(f"  proteção da SYS: {nomes.get(e.protecao, e.protecao)}")
     return linhas
 
 
-def reconectar(ctx: Contexto, slot_esperado: int, segundos: float = 60) -> Estado:
-    """Depois de failover/failback o IP do sistema passa para a outra SYS.
-    Com o notebook ligado direto numa porta, é preciso mudar o cabo."""
+def aguardar_comando(ctx: Contexto, slot: int, segundos: float = 300) -> Estado:
+    """Depois de failover/failback o IP do sistema passa para a outra SYS. Durante a
+    troca é normal a SYS não responder, o FTP travar ou a sessão antiga ficar muda
+    (com switch, o notebook ainda manda para o MAC antigo até o ARP renovar). Espera
+    com paciência e só pergunta ao operador depois de `segundos`."""
     while True:
-        fim = time.time() + ctx.t(segundos)
-        while time.time() < fim:
-            if ctx.cancelado():
-                raise InterruptedError("cancelado")
-            if ctx.chassi.responde():
-                e = ctx.atualizar()
-                if e.slot_ativo == slot_esperado:
-                    ctx.log(f"Conectado de novo: {e.prompt}", "ok")
-                    return e
-                ctx.log(f"Respondeu {e.prompt}, aguardando o slot {slot_esperado} assumir…", "info")
-            ctx.esperar(3)
-        r = ctx.perguntar(
-            f"Sem resposta do slot {slot_esperado}",
-            f"O IP {ctx.chassi.cred.host} passou para a SYS do slot {slot_esperado}.\n\n"
-            f"Se o notebook está ligado direto na porta de rede da SYS, passe o cabo para a "
-            f"porta do slot {slot_esperado} e clique em Tentar de novo.",
-            [("tentar", "Tentar de novo", "sugerido"), ("parar", "Parar aqui", "")])
-        if r != "tentar":
-            raise Parar(f"Sem acesso ao slot {slot_esperado}. O chassi segue funcionando com o slot "
-                        f"{slot_esperado} no comando; continue quando tiver acesso.")
+        try:
+            e = ctx.aguardar(lambda s: s.slot_ativo == slot and s.cfg is not None, segundos,
+                             f"o slot {slot} assumir o comando")
+            ctx.log(f"Slot {slot} no comando: {e.prompt}", "ok")
+            return e
+        except TimeoutError as t:
+            r = ctx.perguntar(
+                f"Sem resposta do slot {slot}",
+                f"Depois de {int(ctx.t(segundos))} s o slot {slot} ainda não respondeu no IP "
+                f"{ctx.chassi.cred.host} ({t}).\n\n"
+                f"• Notebook ligado direto na porta da SYS: passe o cabo para a porta do slot {slot}.\n"
+                f"• Com switch/hub: confira se as duas SYS estão no switch e se o LED do slot "
+                f"{slot} está verde.\n\nO chassi continua no ar; nada é feito enquanto espero.",
+                [("tentar", "Esperar mais", "sugerido"), ("parar", "Parar aqui", "")])
+            if r != "tentar":
+                raise Parar(f"Sem acesso ao slot {slot}. Quando tiver acesso, rode de novo o "
+                            f"'Teste de failover': ele continua de onde parou.")
+
+
+def _fazer_failover(ctx: Contexto, antes_linhas: int) -> Estado:
+    ctx.log("Passando o comando para o slot 2 (failover)…", "info")
+    try:
+        ctx.chassi.failover(1)
+    except ErroTroca as ex:
+        raise Parar(f"A SYS recusou o failover: {ex}") from ex
+    ctx.esperar(5)
+    e2 = aguardar_comando(ctx, 2)
+    if not e2.cfg or not e2.cfg.valido or e2.cfg.linhas < antes_linhas * 0.9:
+        raise Parar(f"Depois do failover a config ficou {e2.cfg.motivo if e2.cfg else '?'} "
+                    f"({e2.cfg.linhas if e2.cfg else 0} linhas, antes {antes_linhas}). Não faça o "
+                    "failback; restaure pelo slot de backup.")
+    ctx.log(f"Config no slot 2: {e2.cfg.linhas} linhas, {e2.cfg.motivo}.", "ok")
+    return e2
+
+
+def _slot1_pronto(e: Estado) -> bool:
+    return e.slot_ativo == 2 and e.em_servico(1)
+
+
+def _fazer_failback(ctx: Contexto) -> Estado:
+    """Devolve o comando ao slot 1 e espera a proteção voltar. Serve tanto para o fim
+    do teste quanto para retomar um failover que ficou pela metade."""
+    e = ctx.estado or ctx.atualizar()
+    if not _slot1_pronto(e):
+        try:
+            e = ctx.aguardar(_slot1_pronto, 300, "o slot 1 voltar e ficar pronto como reserva")
+        except TimeoutError:
+            e = ctx.estado or e
+            r = ctx.perguntar(
+                "O slot 1 ainda não está pronto",
+                f"O slot 2 está no comando e o slot 1 ainda não aparece em serviço "
+                f"({e.resumo_slot(1) if e.slots else 'sem leitura'}).\n\n"
+                "Se o LED do slot 1 estiver verde, pode devolver: se ele não estiver pronto, a "
+                "SYS apenas recusa o failback e nada muda.",
+                [("devolver", "Devolver agora (failback)", "sugerido"),
+                 ("parar", "Parar com o slot 2 no comando", "")])
+            if r != "devolver":
+                raise Parar("O slot 2 segue no comando com a config íntegra. Rode o 'Teste de "
+                            "failover' de novo para fazer só o failback.")
+    for tentativa in range(1, 4):
+        ctx.log("Devolvendo o comando ao slot 1 (util failback slot.1)…", "info")
+        try:
+            ctx.chassi.failback(1)
+            break
+        except ErroTroca as ex:
+            ctx.log(f"A SYS recusou o failback: {ex}", "aviso")
+            if tentativa == 3:
+                raise Parar(f"A SYS recusou o failback três vezes ({ex}). O slot 2 segue no "
+                            "comando; confira o slot 1 no chassi.") from ex
+            ctx.esperar(30)
+    ctx.esperar(5)
+    aguardar_comando(ctx, 1)
+    try:
+        e3 = ctx.aguardar(lambda s: s.protecao == "ativa", 600, "a reserva voltar a ficar disponível")
+    except TimeoutError:
+        e3 = ctx.atualizar()
+        raise Parar(f"O slot 1 voltou ao comando, mas a reserva ainda não ficou disponível "
+                    f"({e3.resumo_slot(1)}; {e3.resumo_slot(2)}). Confira o slot 2 no chassi.")
+    return e3
+
+
+def _devolver_ao_slot1(ctx: Contexto, e: Estado, contexto: str) -> Estado:
+    r = ctx.perguntar(
+        "O slot 2 está no comando",
+        f"{contexto}\n\nO slot 2 está no comando (houve um failover antes). Posso devolver "
+        "o comando ao slot 1 agora com 'util failback slot.1' e esperar a proteção voltar.",
+        [("devolver", "Fazer o failback agora", "sugerido"), ("parar", "Agora não", "")])
+    if r != "devolver":
+        raise Parar("O procedimento começa com o slot 1 no comando. Faça o failback e rode de novo.")
+    return _fazer_failback(ctx)
 
 
 # ------------------------------------------------------------------ etapas
@@ -129,8 +223,12 @@ def etapa_diagnostico(ctx: Contexto) -> Resultado:
     if not e.prompt or e.slot_ativo is None:
         raise Parar("Não reconheci o console da SYS.")
     if e.slot_ativo != 1:
-        raise Parar("O slot 2 está no comando. O procedimento começa com o slot 1 como master: "
-                    "rode 'util failback slot.1' ou use o teste de failback no fim do assistente.")
+        if e.protecao != "em-uso":
+            raise Parar(f"O slot {e.slot_ativo} está no comando sem proteção configurada. "
+                        "Confira o chassi antes de continuar.")
+        e = _devolver_ao_slot1(ctx, e, "O procedimento começa com o slot 1 no comando.")
+        for l in resumo_estado(e):
+            ctx.log(l, "info")
     if not e.cfg or not e.cfg.valido:
         raise Parar(f"A configuração no cartão está ruim ({e.cfg.motivo if e.cfg else 'sem arquivo'}). "
                     "Não atualize assim: restaure a config primeiro (guardiao restaurar).")
@@ -275,14 +373,13 @@ def etapa_ativar(ctx: Contexto) -> Resultado:
         ctx.esperar(20)
         ctx.aguardar(lambda s: s.em_servico(2) and _mesmo(s.versao_rodando(2), nome), 900,
                      "a reserva sincronizar e subir na versão nova")
-        ctx.chassi.failover(1)
-        reconectar(ctx, 2)
+        antes = e.cfg.linhas if e.cfg else 0
+        _fazer_failover(ctx, antes)
         ctx.chassi.reset_slot(1)
         ctx.esperar(20)
         ctx.aguardar(lambda s: s.em_servico(1) and _mesmo(s.versao_rodando(1), nome) and s.slot_ativo == 2,
                      900, "o slot 1 subir na versão nova")
-        ctx.chassi.failback(1)
-        reconectar(ctx, 1)
+        _fazer_failback(ctx)
     e = ctx.atualizar()
     for l in resumo_estado(e):
         ctx.log(l, "info")
@@ -297,6 +394,19 @@ def etapa_protecao(ctx: Contexto) -> Resultado:
         return Resultado(PULADO, "Não há SYS reserva em serviço neste chassi.")
     if e.protecao == "ativa":
         return Resultado(OK, "Proteção ativa: o slot 2 é reserva do slot 1.")
+    if e.protecao == "em-uso":
+        return Resultado(AVISO, "A proteção está configurada e em uso: o slot 2 está no comando. "
+                                "O 'Teste de failover' faz o failback.")
+    if e.protecao == "aguardando":
+        try:
+            ctx.aguardar(lambda s: s.protecao == "ativa", 300, "a reserva ficar disponível")
+        except TimeoutError:
+            e = ctx.estado or e
+            return Resultado(AVISO, f"Proteção configurada, mas a reserva ainda não está disponível "
+                                    f"({e.resumo_slot(1)}; {e.resumo_slot(2)}).")
+        return Resultado(OK, "Proteção ativa: o slot 2 é reserva do slot 1.")
+    if e.slot_ativo != 1:
+        return Resultado(AVISO, "Só configuro a proteção com o slot 1 no comando.")
     tipo = e.slots[2].get("type", "sys-a22-std")
     texto = (f"A reserva está encaixada e em serviço, mas a configuração não a usa "
              f"(slot.1 protMode={e.cfg_params.get('slot.1/gen/protMode', '?')}, "
@@ -331,26 +441,33 @@ def etapa_bak(ctx: Contexto) -> Resultado:
 
 def etapa_teste_failover(ctx: Contexto) -> Resultado:
     e = ctx.atualizar()
+    if e.protecao == "em-uso":
+        # failover já feito (teste anterior interrompido ou troca manual): só falta devolver
+        ctx.log("O slot 2 já está no comando: falta só o failback.", "aviso")
+        e3 = _devolver_ao_slot1(ctx, e, "Retomando o teste de failover.")
+        return Resultado(OK, f"Failback ok: slot 1 no comando e reserva disponível "
+                             f"({e3.cfg.linhas if e3.cfg else '?'} linhas).")
+    if e.protecao == "aguardando":
+        try:
+            e = ctx.aguardar(lambda s: s.protecao == "ativa", 300, "a reserva ficar disponível")
+        except TimeoutError:
+            e = ctx.estado or e
+            return Resultado(AVISO, f"A reserva não ficou disponível ({e.resumo_slot(1)}); "
+                                    "não dá para testar o failover agora.")
     if e.protecao != "ativa":
-        return Resultado(PULADO, "Sem proteção ativa, não há failover para testar.")
+        return Resultado(PULADO, f"Sem proteção ativa ({NOMES_PROTECAO.get(e.protecao, e.protecao)}); "
+                                 "não há failover para testar.")
     texto = ("Vai passar o comando para o slot 2, conferir a configuração e devolver para o slot 1.\n\n"
              "O failover não deve derrubar o ar, mas faça com alguém olhando o sinal. Se o chassi "
              "usa Simulcrypt, o bug 13102 da Harris faz ele parar após o failover.\n\n"
-             "Com o notebook ligado direto na porta da SYS, vou pedir para mudar o cabo duas vezes.")
+             "Durante a troca a SYS fica alguns minutos sem responder na rede: é normal, eu espero. "
+             "Se o notebook estiver ligado direto na porta da SYS, vou pedir para mudar o cabo.")
     if ctx.perguntar("Testar failover e failback?", texto,
                      [("sim", "Testar agora", "sugerido"), ("nao", "Pular", "")]) != "sim":
         return Resultado(PULADO, "Teste não feito.")
     antes = e.cfg.linhas if e.cfg else 0
-    ctx.chassi.failover(1)
-    e2 = reconectar(ctx, 2)
-    if not e2.cfg or not e2.cfg.valido or e2.cfg.linhas < antes * 0.9:
-        raise Parar(f"Depois do failover a config ficou {e2.cfg.motivo if e2.cfg else '?'} "
-                    f"({e2.cfg.linhas if e2.cfg else 0} linhas, antes {antes}). Não faça o failback; "
-                    "restaure pelo slot de backup.")
-    ctx.log(f"Config no slot 2: {e2.cfg.linhas} linhas, {e2.cfg.motivo}.", "ok")
-    ctx.chassi.failback(1)
-    e3 = reconectar(ctx, 1)
-    e3 = ctx.aguardar(lambda s: s.protecao == "ativa", 300, "a reserva voltar a ficar disponível")
+    _fazer_failover(ctx, antes)
+    e3 = _fazer_failback(ctx)
     return Resultado(OK, f"Failover e failback ok; config preservada ({e3.cfg.linhas} linhas).")
 
 

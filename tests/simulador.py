@@ -44,7 +44,11 @@ def config_exemplo(tag="#11CEU_25Marc10", tipo2="none", linhas=8000) -> bytes:
 
 class Sim:
     def __init__(self, raiz_firmware: Path | None = None, versao="v8-6-2.02", reserva=True,
-                 protecao_completa=False, exigir_cabo=False, queda=1.0):
+                 protecao_completa=False, exigir_cabo=False, queda=1.0,
+                 silencioso=False, transicao=0.0, ftp_atraso=0.0):
+        """silencioso/transicao/ftp_atraso reproduzem a bancada com switch: depois do
+        failover a sessão antiga fica muda (sem RST), o IP some por `transicao` s e o
+        FTP volta `ftp_atraso` s depois do telnet."""
         self.dir = Path(tempfile.mkdtemp(prefix="sim-netvx-"))
         self.card = self.dir / "d"
         (self.card / "etc" / "cfg").mkdir(parents=True)
@@ -64,14 +68,18 @@ class Sim:
         self.exigir_cabo = exigir_cabo
         self.cabo = 1
         self.queda = queda
+        self.silencioso, self.transicao, self.ftp_atraso = silencioso, transicao, ftp_atraso
+        self.mudo_ate = 0.0
         self.lock = threading.RLock()
         self.conexoes: list[socket.socket] = []
         self.historico: list[str] = []
         self._iniciar()
 
     # ------------------------------------------------------------ estado
-    def acessivel(self) -> bool:
+    def acessivel(self, ftp: bool = False) -> bool:
         if not self.no_ar[self.ativo]:
+            return False
+        if time.time() < self.mudo_ate + (self.ftp_atraso if ftp else 0):
             return False
         return not self.exigir_cabo or self.cabo == self.ativo
 
@@ -126,7 +134,9 @@ class Sim:
     # ------------------------------------------------------------ comandos
     def stat_slot(self, s: int) -> str:
         presente = self.rodando.get(s) is not None
-        if s == 1:
+        if s == 1 and self.ativo == 2:
+            prot = "inUse"
+        elif s == 1:
             prot = "available" if self.protecao_ok() else (
                 "unavailable" if self.param("slot.1/gen/protMode").startswith("protectedBy") else "unneeded")
         else:
@@ -200,13 +210,18 @@ class Sim:
                 return "Module failover failed: No backup available for slot 1\n", False
             self.ativo = 2
             self.gravar_cfg(self.cfg() + b"slot.2/gen/takeover=1\n" * 100)
+            self.mudo_ate = time.time() + self.transicao
+            self.reiniciar([1])               # o slot 1 sai e volta como reserva
             return "", True
         if p[:2] == ["util", "failback"]:
             if p[2] == "slot.2":
                 return "Module failback failed: Failback failed: slot 2 is not configured for protection.\n", False
             if self.ativo != 2:
                 return "Module failback failed: Failback failed: slot 1 has not failed over.\n", False
+            if not self.no_ar[1]:
+                return "Module failback failed: Failback failed: slot 1 is not ready.\n", False
             self.ativo = 1
+            self.mudo_ate = time.time() + self.transicao
             return "", True
         return f"Unknown command: {cmd}\n", False
 
@@ -243,6 +258,9 @@ class Sim:
                         with sim.lock:
                             out, cair = sim.executar(cmd)
                         if cair:
+                            if sim.silencioso:       # switch: a sessão antiga só fica muda
+                                while f.readline():
+                                    pass
                             return
                         s.sendall((cmd + "\r\n" + out.replace("\n", "\r\n")
                                    + f"#11 CEU.{sim.ativo}M> ").encode())
@@ -267,7 +285,7 @@ class Sim:
             authorizer = aut
 
             def on_connect(self):
-                if not sim.acessivel():
+                if not sim.acessivel(ftp=True):
                     self.close()
 
         H.banner = "VxWorks FTP server ready"

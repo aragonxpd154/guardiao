@@ -41,7 +41,7 @@ A correção foi validada no chassi do Morro do Céu em novembro de 2026: upload
 | 6 | **Ativar** | Duas opções: **reiniciar o sistema** (1 a 2 min fora do ar) ou **sem queda**, uma controladora de cada vez (reset da reserva, failover, reset do slot 1, failback). |
 | 7 | **Proteção** | Se a reserva está encaixada mas não configurada (`slot.2/gen/type=none`, o caso do Morro do Céu), configura e confere `protAvail = available`. |
 | 8 | **current.bak** | Confirma que a SYS passou a guardar a config anterior a cada gravação. |
-| 9 | **Failover** | Passa o comando para o slot 2, confere se a config ficou inteira e devolve com `util failback slot.1`. |
+| 9 | **Failover** | Passa o comando para o slot 2, confere se a config ficou inteira e devolve com `util failback slot.1`. Espera a SYS voltar durante a troca e, se o slot 2 tiver ficado no comando, faz só o failback. |
 | 10 | **Vigiar** | Inclui o chassi no Guardião: coleta a cada 10 minutos e aviso na área de trabalho se a config zerar. |
 
 Toda ação que pode afetar o ar pede confirmação. Pelo menu dá para **voltar à versão anterior** a qualquer momento: o assistente faz o bind da original e reinicia o sistema.
@@ -62,7 +62,7 @@ Toda ação que pode afetar o ar pede confirmação. Pelo menu dá para **voltar
 Baixe o `guardiao_<versão>_all.deb` em [Releases](../../releases) e dê dois cliques, ou:
 
 ```bash
-sudo apt install ./guardiao_2.0.0_all.deb
+sudo apt install ./guardiao_2.0.1_all.deb
 ```
 
 ### Opção 2: a partir do código
@@ -136,7 +136,7 @@ O simulador ([`tests/simulador.py`](tests/simulador.py)) imita um chassi com dua
 ## Publicar uma versão nova
 
 1. Altere `__version__` em `guardiao/__init__.py` e escreva a seção da versão no `CHANGELOG.md`.
-2. `git commit -am "Guardião 2.0.1" && git tag v2.0.1 && git push origin main v2.0.1`
+2. `git commit -am "Guardião 2.0.2" && git tag v2.0.2 && git push origin main v2.0.2`
 
 O GitHub Actions roda os testes, gera o `.deb` e cria a Release com o SHA-256. No dia seguinte, os Guardiões instalados oferecem a atualização.
 

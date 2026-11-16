@@ -7,6 +7,8 @@ que está no comando.
 
 from __future__ import annotations
 
+import ftplib
+import re
 import time
 from dataclasses import dataclass, field
 
@@ -14,6 +16,18 @@ from . import patch
 from .console import Console, ErroConsole, ler_firmware, ler_stat
 from .sysftp import SysFtp
 from .validacao import ResultadoCfg, crc_netvx, descrever_firmware, ler_parametros, validar_cfg
+
+# Falhas de rede esperadas enquanto o IP do sistema passa de uma SYS para a outra
+# (failover, failback, reset): conexão recusada, sessão muda, FTP que não responde.
+FALHAS_DE_REDE = (OSError, EOFError, ErroConsole, ftplib.Error)
+
+# Respostas da SYS que indicam que o failover/failback NÃO foi feito.
+_RECUSA = re.compile(r"failed|no backup|not configured|not ready|has not|unknown command|"
+                     r"invalid|error|cannot|not allowed", re.I)
+
+
+class ErroTroca(Exception):
+    """A SYS recusou o failover ou o failback (a mensagem é a resposta dela)."""
 
 
 @dataclass
@@ -55,18 +69,42 @@ class Estado:
         return s.get("type", "none") not in ("", "none") and s.get("status") == "inService"
 
     @property
+    def reserva_presente(self) -> bool:
+        return self.slots.get(2, {}).get("type", "none") not in ("", "none")
+
+    @property
+    def protecao_configurada(self) -> bool:
+        return (self.cfg_params.get("slot.1/gen/protMode", "").startswith("protectedBy")
+                and self.cfg_params.get("slot.2/gen/type", "none") not in ("", "none"))
+
+    @property
     def protecao(self) -> str:
-        """'ativa' | 'incompleta' | 'desligada' | 'sem-reserva'"""
+        """Estado da proteção 1+1 das SYS:
+        'ativa'       slot 1 no comando e slot 2 pronto para assumir;
+        'em-uso'      o slot 2 está no comando (houve failover) — falta o failback;
+        'aguardando'  configurada, mas a reserva ainda não está disponível
+                      (reiniciando, sincronizando);
+        'incompleta'  só metade configurada (o caso do Morro do Céu: slot.2 type=none);
+        'desligada'   | 'sem-reserva'."""
         modo = self.cfg_params.get("slot.1/gen/protMode", "")
         tipo2 = self.cfg_params.get("slot.2/gen/type", "none")
         disp = self.slots.get(1, {}).get("protAvail", "")
-        if not self.tem_reserva_fisica:
+        if self.slot_ativo == 2 and modo.startswith("protectedBy"):
+            return "em-uso"
+        if not self.reserva_presente:
             return "sem-reserva"
-        if modo.startswith("protectedBy") and disp == "available":
-            return "ativa"
+        if self.protecao_configurada:
+            if disp == "available" and self.slot_ativo == 1:
+                return "ativa"
+            return "aguardando"
         if modo.startswith("protectedBy") or tipo2 not in ("", "none"):
             return "incompleta"
         return "desligada"
+
+    def resumo_slot(self, slot: int) -> str:
+        s = self.slots.get(slot, {})
+        return (f"slot {slot}: status {s.get('status', '?')}, falha {s.get('fault', '?')}, "
+                f"proteção {s.get('protAvail', '?')}, LED {s.get('led1', '?')}")
 
     @property
     def firmware_sys(self) -> str:
@@ -209,11 +247,25 @@ class Chassi:
     def reset_slot(self, slot: int):
         return self.comando(f"util reset slot.{slot}", timeout=30)
 
+    def _troca(self, cmd: str) -> str:
+        """failover/failback. A sessão pode cair, ou ficar muda (com switch, o IP vai
+        para a outra SYS e a conexão antiga não recebe nem resposta nem RST): as duas
+        coisas são normais. Só é erro se a SYS responder recusando."""
+        try:
+            out = self.comando(cmd, timeout=15, espera_queda=True)
+        except FALHAS_DE_REDE as ex:
+            self.log(f"(sessão encerrada pela troca: {ex.__class__.__name__})", "info")
+            return ""
+        if _RECUSA.search(out or ""):
+            raise ErroTroca(" ".join(out.split()))
+        return out
+
     def failover(self, slot: int = 1) -> str:
-        return self.comando(f"util failover slot.{slot}", timeout=20, espera_queda=True)
+        return self._troca(f"util failover slot.{slot}")
 
     def failback(self, slot: int = 1) -> str:
-        return self.comando(f"util failback slot.{slot}", timeout=20, espera_queda=True)
+        """O argumento é o slot PRIMÁRIO (slot.1), não a reserva."""
+        return self._troca(f"util failback slot.{slot}")
 
     def configurar_reserva(self, tipo: str) -> str:
         return self.comando(f"cfg slot.2/gen type={tipo}", timeout=60)
@@ -232,7 +284,7 @@ class Chassi:
                 if condicao(e):
                     return e
                 ultimo = "a SYS respondeu, mas ainda não está no estado esperado"
-            except (OSError, ErroConsole) as ex:
+            except FALHAS_DE_REDE as ex:
                 ultimo = f"sem resposta ainda ({ex.__class__.__name__})"
             if aviso:
                 aviso(ultimo, max(0, fim - time.time()))
@@ -243,5 +295,5 @@ class Chassi:
         try:
             with self.console(timeout=5):
                 return True
-        except (OSError, ErroConsole):
+        except FALHAS_DE_REDE:
             return False
